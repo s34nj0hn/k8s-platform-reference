@@ -29,6 +29,15 @@ describe("public telemetry worker", () => {
 
     expect(response.status).toBe(405)
     expect(response.headers.get("allow")).toBe("GET")
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://s34nj0hn.dev")
+  })
+
+  it("handles browser CORS preflight", async () => {
+    const response = await worker.fetch(new Request("https://api.s34nj0hn.dev/cluster/heartbeat", { method: "OPTIONS" }), env, executionContext())
+
+    expect(response.status).toBe(204)
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://s34nj0hn.dev")
+    expect(response.headers.get("access-control-allow-methods")).toContain("GET")
   })
 
   it("returns not found for other paths", async () => {
@@ -59,6 +68,7 @@ describe("public telemetry worker", () => {
     const body = await response.json<Record<string, unknown>>()
 
     expect(response.status).toBe(200)
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://s34nj0hn.dev")
     expect(Object.keys(body).sort()).toEqual([
       "cluster_uptime_seconds",
       "cpu_usage_pct",

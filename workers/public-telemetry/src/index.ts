@@ -1,12 +1,16 @@
 import { fetchMetrics, type Env } from "./metrics"
-import { boundedErrorResponse, jsonResponse } from "./response"
+import { boundedErrorResponse, corsResponse, jsonResponse } from "./response"
 
 const DEFAULT_CACHE_TTL_SECONDS = 30
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    if (request.method === "OPTIONS") {
+      return corsResponse({ status: 204 })
+    }
+
     if (request.method !== "GET") {
-      return new Response(null, {
+      return corsResponse({
         status: 405,
         headers: { allow: "GET" },
       })
@@ -14,7 +18,7 @@ export default {
 
     const url = new URL(request.url)
     if (url.pathname !== "/cluster/heartbeat") {
-      return new Response(null, { status: 404 })
+      return corsResponse({ status: 404 })
     }
 
     const cacheTtl = cacheTtlSeconds(env.CACHE_TTL_SECONDS)

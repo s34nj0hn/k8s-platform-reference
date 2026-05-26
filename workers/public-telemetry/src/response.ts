@@ -22,6 +22,7 @@ export type ErrorResponse = {
 export function jsonResponse(body: PublicTelemetryResponse | ErrorResponse, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers)
   headers.set("content-type", "application/json; charset=utf-8")
+  setCorsHeaders(headers)
 
   return new Response(JSON.stringify(body), {
     ...init,
@@ -31,4 +32,20 @@ export function jsonResponse(body: PublicTelemetryResponse | ErrorResponse, init
 
 export function boundedErrorResponse(): Response {
   return jsonResponse({ status: "error", code: 502 }, { status: 502 })
+}
+
+export function corsResponse(init: ResponseInit = {}): Response {
+  const headers = new Headers(init.headers)
+  setCorsHeaders(headers)
+  return new Response(null, {
+    ...init,
+    headers,
+  })
+}
+
+export function setCorsHeaders(headers: Headers): void {
+  headers.set("access-control-allow-origin", "https://s34nj0hn.dev")
+  headers.set("access-control-allow-methods", "GET, OPTIONS")
+  headers.set("access-control-allow-headers", "content-type")
+  headers.set("vary", "Origin")
 }
