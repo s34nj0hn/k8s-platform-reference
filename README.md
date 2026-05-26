@@ -1,39 +1,48 @@
 # Kubernetes Platform Reference
 
-This repo is the clean version of the platform story.
+I build secure Kubernetes platforms that teams can understand, operate, and trust.
 
-My personal homelab is where the real services live. It has history, weird edges, storage decisions, and workloads I actually use. That is useful, but it is not the best thing to hand to a recruiter and say, "start here."
+This repository is a reference implementation of that work: a small K3s platform managed through GitOps, guarded by admission policy, instrumented with Prometheus and Grafana, and designed with public-safe telemetry from the start.
 
-`k8s-platform-reference` is different. It is a small Kubernetes cluster built to show the way I think about platform engineering: Git owns the cluster, secrets are encrypted before they touch the repo, workloads start from explicit traffic rules, and policy is enforced by the API server instead of living as a checklist in someone's head.
+The point is not to collect tools. The point is to show the operating model behind the tools. Git is the source of truth. Secrets are encrypted before they reach the repository. Workloads declare their resource needs and network paths. Policy checks happen at admission, not after someone remembers to review a checklist. Metrics are useful internally, but only sanitized aggregates leave the cluster.
 
-The cluster is not live yet. This first commit sets the boundary and the repo shape. The next work is to bootstrap a separate K3s cluster from this repo and move the public telemetry on `s34nj0hn.dev` over to it.
+That is the platform engineering story I care about: secure defaults, visible tradeoffs, and enough documentation that another engineer can tell what is supposed to happen.
 
-## What this repo is for
+## What this demonstrates
 
-A reviewer should be able to read this repo in ten minutes and understand the platform. Not every historical detour. Not my personal workloads. The platform.
+The first version focuses on a narrow platform slice that is easy to review and hard to fake.
 
-The first version will prove a narrow set of things:
+Flux reconciles the cluster from this repository. Kustomize keeps the environment layout explicit. SOPS and age protect Kubernetes secrets. OPA Gatekeeper blocks selected unsafe Kubernetes objects before they land. NetworkPolicies describe which workloads can talk to each other. kube-prometheus-stack provides the internal observability layer. A Cloudflare Worker publishes only safe aggregate telemetry to `s34nj0hn.dev`.
 
-- Flux reconciles the cluster from Git
-- SOPS and age protect secrets in the repo
-- OPA Gatekeeper blocks selected bad Kubernetes objects
-- NetworkPolicies describe traffic intent from the first demo workload
-- kube-prometheus-stack collects internal metrics
-- a Cloudflare Worker publishes only safe aggregate telemetry to my portfolio site
+The demo workload is deliberately small. A reference platform should make the platform visible, not bury it under an impressive-looking app.
 
-That is enough. If the first version tries to include every platform tool I like, it will turn into another messy lab.
+## What I am guarding against
 
-## What this repo will not run
+A lot of platform work fails in boring ways. Someone adds a namespace without Pod Security labels. A workload ships without CPU or memory boundaries. An image tag points at `latest`, so the running code can change without a Git diff. A demo service gets broad network access because nobody wrote the deny rule first.
 
-No media stack. No bookmark service. No personal automation. No "this exists because I use it at home" workloads.
+This repo treats those as design problems, not cleanup tasks.
 
-The demo app should be boring. Boring is good here. The platform is the thing being evaluated.
+The admission policies and network rules are not here to look strict. They are here because GitOps only works if the repo describes the real operating contract.
+
+## Public telemetry
+
+The portfolio telemetry for this platform is designed to prove the cluster is alive without exposing the cluster.
+
+The public path is intentionally narrow:
+
+```text
+Grafana service account -> Cloudflare Worker -> sanitized JSON -> s34nj0hn.dev
+```
+
+The website should be able to show health, pod counts, resource usage, Flux status, and Gatekeeper policy status. It should not expose node names, pod names, namespace names, internal IPs, ingress inventory, labels, logs, Grafana datasource IDs, or raw Prometheus queries.
+
+That boundary is documented in `docs/security/public-telemetry-contract.md`.
 
 ## Reviewer path
 
-Start with `docs/architecture.md`. Then read `docs/security/public-telemetry-contract.md` to see how the public stats are kept safe. After that, look at the GitOps entry point under `GitOps/clusters/reference/` and the policy notes under `docs/security/`.
+If you have ten minutes, start with `docs/architecture.md`, then read `docs/security/public-telemetry-contract.md` and `docs/security/policy-as-code.md`. After that, look at the GitOps entry point under `GitOps/clusters/reference/`.
 
-Once the cluster is live, this README will link to the portfolio telemetry view and the exact GitOps/policy evidence behind it.
+Once the cluster is live, this README will link to the public telemetry view and the GitOps evidence behind it.
 
 ## Repository layout
 
@@ -57,4 +66,6 @@ Once the cluster is live, this README will link to the portfolio telemetry view 
 
 ## Status
 
-Phase 0: repo scaffold and design docs.
+Phase 0: repository scaffold and design docs.
+
+The next milestone is a real K3s cluster bootstrapped from this repository with Flux reconciliation working end to end.

@@ -1,10 +1,12 @@
 # Architecture
 
-This is a separate Kubernetes reference cluster, not a cleaned-up corner of my personal homelab.
+This is a separate Kubernetes reference cluster, not a cleaned-up corner of older infrastructure.
 
-The intended shape is small: K3s, Flux, a few platform controllers, one or two demo workloads, and public-safe telemetry. The cluster should have its own Kubernetes API, kubeconfig, Flux bootstrap, Grafana service account, and Cloudflare Worker path.
+The v1 shape is small: a single-node K3s cluster inside the `k8s-reference-01` KVM/libvirt VM on Gaia, with Flux, a few platform controllers, one or two demo workloads, and public-safe telemetry. The cluster should have its own Kubernetes API, kubeconfig, Flux bootstrap, Grafana service account, and Cloudflare Worker path.
 
-It can share the same physical network and the same operating lessons as my lab. It should not share the same story. The personal lab is allowed to be messy because it runs real things. This cluster should be easy to review.
+Local administration reaches the API through an SSH tunnel from the workstation to Gaia, then to the VM on the libvirt network: `127.0.0.1:16443 -> gaia -> 192.168.122.50:6443`.
+
+It can share the same physical network and the same operating lessons as earlier systems. It should not share the same story. This cluster should be easy to review, rebuild, and explain.
 
 ## Platform layers
 
