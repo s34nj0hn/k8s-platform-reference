@@ -20,3 +20,5 @@ spec:
       - gatekeeper-system
       - default
       - local-path-storage
+      - kube-public
+      - kube-node-lease
