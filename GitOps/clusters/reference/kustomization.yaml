@@ -4,3 +4,7 @@ resources:
   - flux-system/gotk-components.yaml
   - flux-system/source.yaml
   - flux-system/kustomization.yaml
+  - flux-system/apps-kustomization.yaml
+  - flux-system/infrastructure-kustomization.yaml
+  - flux-system/policies-kustomization.yaml
+  - flux-system/monitoring-kustomization.yaml

@@ -1,0 +1,10 @@
+name = "public-telemetry"
+main = "src/index.ts"
+compatibility_date = "2026-05-26"
+
+routes = [
+  { pattern = "api.s34nj0hn.dev/cluster/heartbeat", custom_domain = false }
+]
+
+[vars]
+CACHE_TTL_SECONDS = "30"

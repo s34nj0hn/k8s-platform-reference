@@ -20,6 +20,8 @@ The response can include aggregate health numbers:
   "node_count": 2,
   "running_pods": 24,
   "total_pods": 25,
+  "succeeded_pods": 1,
+  "cluster_uptime_seconds": 86400,
   "cpu_usage_pct": 8.2,
   "memory_usage_pct": 31.4,
   "pvc_bound": 3,
@@ -30,7 +32,7 @@ The response can include aggregate health numbers:
 }
 ```
 
-That proves the platform is alive without publishing the shape of the private network.
+`succeeded_pods` and `cluster_uptime_seconds` are retained for portfolio compatibility during the reference-cluster cutover. That proves the platform is alive without publishing the shape of the private network.
 
 ## Never expose
 

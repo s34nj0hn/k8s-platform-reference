@@ -15,3 +15,10 @@ rendered/
 
 # Tool caches
 .cache/
+.wrangler/
+
+# Package dependencies
+node_modules/
+
+# Local git worktrees
+.worktrees/
