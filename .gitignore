@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Local cluster/operator state
+*.kubeconfig
+.kube/
+.age-key.txt
+.env
+.env.*
+
+# Rendered manifests
+/tmp/
+dist/
+rendered/
+
+# Tool caches
+.cache/
