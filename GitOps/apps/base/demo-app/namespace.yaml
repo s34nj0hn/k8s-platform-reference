@@ -6,3 +6,5 @@ metadata:
     kubernetes.io/metadata.name: demo-app
     app.kubernetes.io/name: demo-app
     app.kubernetes.io/part-of: reference-platform
+    platform.s34nj0hn.dev/owner: platform
+    platform.s34nj0hn.dev/purpose: demo-workload
