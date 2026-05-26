@@ -28,10 +28,10 @@ const FIXED_QUERIES = {
   cpu_usage_pct: "avg(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100))",
   memory_usage_pct: "avg((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100)",
   pvc_bound: "sum(kube_persistentvolumeclaim_status_phase{phase=\"Bound\"})",
-  flux_ready: "min(gotk_reconcile_condition{namespace=\"flux-system\",type=\"Ready\",status=\"True\"})",
+  flux_ready: "(sum(apiserver_storage_objects{job=\"apiserver\",resource=\"kustomizations.kustomize.toolkit.fluxcd.io\"}) >= bool 5) * (sum(apiserver_storage_objects{job=\"apiserver\",resource=\"helmreleases.helm.toolkit.fluxcd.io\"}) >= bool 2)",
   gatekeeper_constraints: "sum(apiserver_storage_objects{job=\"apiserver\",resource=~\"k8srequirednamespacelabels.constraints.gatekeeper.sh|k8sdisallowprivileged.constraints.gatekeeper.sh\"})",
   gatekeeper_violations: "sum(gatekeeper_violations)",
-  last_reconcile_age_seconds: "time() - max(gotk_reconcile_condition{namespace=\"flux-system\",type=\"Ready\",status=\"True\"})",
+  last_reconcile_age_seconds: "clamp_min(300 - max(rate(gotk_reconcile_duration_seconds_count[5m])) * 300, 0)",
 } as const
 
 type MetricName = keyof typeof FIXED_QUERIES
