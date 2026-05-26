@@ -64,10 +64,10 @@ No monitoring service should have a public ingress or public LoadBalancer addres
 
 ## Cloudflare Tunnel backend path
 
-The reference cluster uses the existing Cloudflare Tunnel `Secret_Tunnel` with ID:
+The reference cluster uses the Cloudflare Tunnel `k8s-reference-telemetry` with ID:
 
 ```text
-6a813937-46f5-42b5-a0ce-40056e6b6294
+c7867583-d197-4456-bc14-2f5317d111ef
 ```
 
 GitOps deploys `cloudflared` in the `cloudflared` namespace and routes this private hostname to in-cluster Grafana:
@@ -92,13 +92,13 @@ kubectl --context k8s-platform-reference -n cloudflared create secret generic cl
   --from-literal=token='<cloudflare-tunnel-token>'
 ```
 
-Create or confirm the Cloudflare DNS route for `reference-grafana.s34nj0hn.dev` to `Secret_Tunnel` in the Cloudflare dashboard or with a Cloudflare API client that supports tunnel route management. Wrangler 4.82.2 does not expose `tunnel route dns`.
+Create or confirm the Cloudflare DNS route for `reference-grafana.s34nj0hn.dev` to `k8s-reference-telemetry` in the Cloudflare dashboard or with a Cloudflare API client that supports tunnel route management. Wrangler 4.82.2 does not expose `tunnel route dns`.
 
 Verify the tunnel after reconciliation:
 
 ```bash
 kubectl --context k8s-platform-reference -n cloudflared get deploy,pods,svc
-wrangler tunnel info Secret_Tunnel
+wrangler tunnel info k8s-reference-telemetry
 ```
 
 ## Worker secrets
