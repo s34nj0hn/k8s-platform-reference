@@ -62,6 +62,45 @@ kubectl --context k8s-platform-reference -n monitoring get pods,svc
 
 No monitoring service should have a public ingress or public LoadBalancer address by default.
 
+## Cloudflare Tunnel backend path
+
+The reference cluster uses the existing Cloudflare Tunnel `Secret_Tunnel` with ID:
+
+```text
+6a813937-46f5-42b5-a0ce-40056e6b6294
+```
+
+GitOps deploys `cloudflared` in the `cloudflared` namespace and routes this private hostname to in-cluster Grafana:
+
+```text
+reference-grafana.s34nj0hn.dev -> http://kube-prometheus-stack-grafana.monitoring.svc.cluster.local:80
+```
+
+Before reconciling the `infrastructure` Kustomization, create the tunnel credentials secret out-of-band. Do not commit the credentials JSON.
+
+```bash
+kubectl --context k8s-platform-reference create namespace cloudflared --dry-run=client -o yaml \
+  | kubectl --context k8s-platform-reference apply -f -
+
+kubectl --context k8s-platform-reference label namespace cloudflared \
+  app.kubernetes.io/part-of=k8s-platform-reference \
+  platform.s34nj0hn.dev/owner=platform \
+  platform.s34nj0hn.dev/purpose=private-tunnel \
+  --overwrite
+
+kubectl --context k8s-platform-reference -n cloudflared create secret generic cloudflared-tunnel-credentials \
+  --from-file=credentials.json=/path/to/6a813937-46f5-42b5-a0ce-40056e6b6294.json
+```
+
+Create or confirm the Cloudflare DNS route for `reference-grafana.s34nj0hn.dev` to `Secret_Tunnel` in the Cloudflare dashboard or with a Cloudflare API client that supports tunnel route management. Wrangler 4.82.2 does not expose `tunnel route dns`.
+
+Verify the tunnel after reconciliation:
+
+```bash
+kubectl --context k8s-platform-reference -n cloudflared get deploy,pods,svc
+wrangler tunnel info Secret_Tunnel
+```
+
 ## Worker secrets
 
 Set secrets with Wrangler. Do not commit token values, backend tunnel URLs, or internal hostnames.
@@ -71,7 +110,13 @@ wrangler secret put GRAFANA_TOKEN --config workers/public-telemetry/wrangler.tom
 wrangler secret put METRICS_BACKEND_URL --config workers/public-telemetry/wrangler.toml
 ```
 
-Use `METRICS_BACKEND_URL` for the protected Grafana API base URL or `/api/ds/query` URL. The Worker also accepts the existing `GRAFANA_URL` secret name as a migration fallback. The Worker strips incoming browser query parameters and uses fixed server-side queries only.
+Use `METRICS_BACKEND_URL` for the protected Grafana API base URL or `/api/ds/query` URL. For the reference cluster tunnel, use:
+
+```text
+https://reference-grafana.s34nj0hn.dev/api/ds/query
+```
+
+The Worker also accepts the existing `GRAFANA_URL` secret name as a migration fallback. The Worker strips incoming browser query parameters and uses fixed server-side queries only.
 
 ## Local validation
 

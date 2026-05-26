@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-config
+  namespace: cloudflared
+data:
+  config.yaml: |
+    tunnel: 6a813937-46f5-42b5-a0ce-40056e6b6294
+    credentials-file: /etc/cloudflared/creds/credentials.json
+    metrics: 0.0.0.0:2000
+    no-autoupdate: true
+    ingress:
+      - hostname: reference-grafana.s34nj0hn.dev
+        service: http://kube-prometheus-stack-grafana.monitoring.svc.cluster.local:80
+      - service: http_status:404

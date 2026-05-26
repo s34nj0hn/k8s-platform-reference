@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloudflared
+  labels:
+    app.kubernetes.io/part-of: k8s-platform-reference
+    platform.s34nj0hn.dev/owner: platform
+    platform.s34nj0hn.dev/purpose: private-tunnel
