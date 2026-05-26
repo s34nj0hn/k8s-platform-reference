@@ -76,7 +76,7 @@ GitOps deploys `cloudflared` in the `cloudflared` namespace and routes this priv
 reference-grafana.s34nj0hn.dev -> http://kube-prometheus-stack-grafana.monitoring.svc.cluster.local:80
 ```
 
-Before reconciling the `infrastructure` Kustomization, create the tunnel credentials secret out-of-band. Do not commit the credentials JSON.
+Before reconciling the `infrastructure` Kustomization, create the tunnel token secret out-of-band. Do not commit the token.
 
 ```bash
 kubectl --context k8s-platform-reference create namespace cloudflared --dry-run=client -o yaml \
@@ -88,8 +88,8 @@ kubectl --context k8s-platform-reference label namespace cloudflared \
   platform.s34nj0hn.dev/purpose=private-tunnel \
   --overwrite
 
-kubectl --context k8s-platform-reference -n cloudflared create secret generic cloudflared-tunnel-credentials \
-  --from-file=credentials.json=/path/to/6a813937-46f5-42b5-a0ce-40056e6b6294.json
+kubectl --context k8s-platform-reference -n cloudflared create secret generic cloudflared-tunnel-token \
+  --from-literal=token='<cloudflare-tunnel-token>'
 ```
 
 Create or confirm the Cloudflare DNS route for `reference-grafana.s34nj0hn.dev` to `Secret_Tunnel` in the Cloudflare dashboard or with a Cloudflare API client that supports tunnel route management. Wrangler 4.82.2 does not expose `tunnel route dns`.

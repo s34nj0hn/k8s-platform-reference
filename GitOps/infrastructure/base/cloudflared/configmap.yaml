@@ -5,8 +5,6 @@ metadata:
   namespace: cloudflared
 data:
   config.yaml: |
-    tunnel: 6a813937-46f5-42b5-a0ce-40056e6b6294
-    credentials-file: /etc/cloudflared/creds/credentials.json
     metrics: 0.0.0.0:2000
     no-autoupdate: true
     ingress:
