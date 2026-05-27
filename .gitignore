@@ -15,7 +15,11 @@ rendered/
 
 # Tool caches
 .cache/
+.kilo/
 .wrangler/
+
+# Local planning notes
+docs/plans/
 
 # Package dependencies
 node_modules/
