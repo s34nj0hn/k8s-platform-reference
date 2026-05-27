@@ -2,70 +2,146 @@
 
 I build secure Kubernetes platforms that teams can understand, operate, and trust.
 
-This repository is a reference implementation of that work: a small K3s platform managed through GitOps, guarded by admission policy, instrumented with Prometheus and Grafana, and designed with public-safe telemetry from the start.
+This repository is the public reference implementation for that work: a small, real K3s platform reconciled by Flux, guarded by OPA Gatekeeper, instrumented with kube-prometheus-stack, and connected to a public-safe telemetry endpoint.
 
-The point is not to collect tools. The point is to show the operating model behind the tools. Git is the source of truth. Secrets are encrypted before they reach the repository. Workloads declare their resource needs and network paths. Policy checks happen at admission, not after someone remembers to review a checklist. Metrics are useful internally, but only sanitized aggregates leave the cluster.
+The point is not to pretend this is enterprise production. The point is to show platform engineering discipline in a reviewable shape: Git as the operating contract, narrow admission controls, documented security boundaries, boring demo workloads, and telemetry that proves the cluster is alive without exposing the cluster.
 
-That is the platform engineering story I care about: secure defaults, visible tradeoffs, and enough documentation that another engineer can tell what is supposed to happen.
+## Current reality
+
+This is no longer just a scaffold.
+
+The reference cluster is live as a single-node K3s cluster named `reference-01` running inside the `k8s-reference-01` KVM/libvirt VM on Gaia. Local administration reaches the Kubernetes API through an SSH tunnel from the workstation to Gaia, then to the VM on the libvirt network.
+
+Flux is reconciling this repository into the cluster. The current Flux Kustomizations are:
+
+- `flux-system`
+- `infrastructure`
+- `policies`
+- `monitoring`
+- `apps`
+
+The live platform currently includes:
+
+- K3s `v1.34.3+k3s1`
+- Flux + Kustomize reconciliation from `GitOps/clusters/reference/`
+- OPA Gatekeeper installed by Helm
+- Two enforced Gatekeeper constraints with zero current violations
+- kube-prometheus-stack installed by Helm
+- Cloudflare Tunnel deployed in-cluster for private Grafana access
+- A Cloudflare Worker at `https://api.s34nj0hn.dev/cluster/heartbeat`
+- A small `demo-app` workload using an unprivileged nginx image with resource requests, limits, and restricted container security context
+
+The public telemetry endpoint currently returns sanitized aggregate JSON: node count, pod counts, CPU and memory percentages, PVC count, Flux readiness, Gatekeeper constraint count, violation count, and reconcile freshness. It does not return node names, pod names, namespace names, internal IPs, labels, annotations, Grafana datasource IDs, raw Prometheus queries, logs, or traces.
 
 ## What this demonstrates
 
-The first version focuses on a narrow platform slice that is easy to review and hard to fake.
+This repo demonstrates a small platform slice that is easy to inspect and hard to fake.
 
-Flux reconciles the cluster from this repository. Kustomize keeps the environment layout explicit. SOPS and age protect Kubernetes secrets. OPA Gatekeeper blocks selected unsafe Kubernetes objects before they land. NetworkPolicies describe which workloads can talk to each other. kube-prometheus-stack provides the internal observability layer. A Cloudflare Worker publishes only safe aggregate telemetry to `s34nj0hn.dev`.
+Flux owns steady-state cluster reconciliation. Kustomize keeps the environment layout visible. Gatekeeper turns selected design rules into API-server behavior. kube-prometheus-stack provides internal observability. The Worker publishes only hand-selected aggregate telemetry to the public internet.
 
-The demo workload is deliberately small. A reference platform should make the platform visible, not bury it under an impressive-looking app.
+The demo app is deliberately boring. It exists to make the platform visible, not to distract from it.
 
-## What I am guarding against
+## What is intentionally not claimed yet
 
-A lot of platform work fails in boring ways. Someone adds a namespace without Pod Security labels. A workload ships without CPU or memory boundaries. An image tag points at `latest`, so the running code can change without a Git diff. A demo service gets broad network access because nobody wrote the deny rule first.
+This repo should stay honest.
 
-This repo treats those as design problems, not cleanup tasks.
+SOPS + age is the intended GitOps secret pattern, but the current Cloudflare tunnel token is still created out-of-band and is not committed to Git. That is safer than committing plaintext, but it is not the final encrypted-secret workflow.
 
-The admission policies and network rules are not here to look strict. They are here because GitOps only works if the repo describes the real operating contract.
+App-level NetworkPolicies are documented as the target model, but they are not yet implemented for `demo-app`. The only NetworkPolicies currently present are the Flux bootstrap policies generated with Flux.
 
-## Public telemetry
+This repo also does not claim full Kubernetes security coverage. Gatekeeper currently enforces a narrow v1 policy set: required namespace ownership/purpose labels and no privileged app pods. It does not replace Pod Security Admission, RBAC review, image scanning, runtime detection, host hardening, backup testing, or incident response.
 
-The portfolio telemetry for this platform is designed to prove the cluster is alive without exposing the cluster.
+That honesty is part of the artifact. A small set of real controls is better than a large fake security catalog.
+
+## Public telemetry boundary
 
 The public path is intentionally narrow:
 
 ```text
-Grafana service account -> Cloudflare Worker -> sanitized JSON -> s34nj0hn.dev
+Grafana service account -> Cloudflare Tunnel -> Cloudflare Worker -> sanitized JSON -> s34nj0hn.dev
 ```
 
-The website should be able to show health, pod counts, resource usage, Flux status, and Gatekeeper policy status. It should not expose node names, pod names, namespace names, internal IPs, ingress inventory, labels, logs, Grafana datasource IDs, or raw Prometheus queries.
+Public endpoint:
 
-That boundary is documented in `docs/security/public-telemetry-contract.md`.
+```text
+https://api.s34nj0hn.dev/cluster/heartbeat
+```
+
+The Worker only accepts `GET /cluster/heartbeat` and uses fixed server-side Grafana queries. Browser input cannot choose PromQL, datasource IDs, dashboard IDs, panel IDs, or raw query bodies.
+
+The contract is documented in `docs/security/public-telemetry-contract.md`. The operational cutover and rollback path are documented in `docs/operations/public-telemetry-worker-runbook.md`.
 
 ## Reviewer path
 
-If you have ten minutes, start with `docs/architecture.md`, then read `docs/security/public-telemetry-contract.md` and `docs/security/policy-as-code.md`. After that, look at the GitOps entry point under `GitOps/clusters/reference/`.
+If you have ten minutes, read in this order:
 
-Once the cluster is live, this README will link to the public telemetry view and the GitOps evidence behind it.
+1. `docs/architecture.md` — cluster shape and operating boundary.
+2. `docs/security/policy-as-code.md` — what Gatekeeper enforces and why.
+3. `docs/security/public-telemetry-contract.md` — what public telemetry may and may not expose.
+4. `docs/operations/public-telemetry-worker-runbook.md` — how the Worker reaches private Grafana safely.
+5. `GitOps/clusters/reference/` — the Flux entry point.
+
+Then check the public heartbeat endpoint to confirm that the cluster is live without exposing sensitive internals.
 
 ## Repository layout
 
 ```text
 ├── GitOps/
-│   ├── clusters/reference/        # Flux entry point
-│   ├── infrastructure/reference/  # ingress, load balancing, secrets, policy, telemetry bridge
-│   ├── apps/reference/            # demo workloads only
-│   ├── monitoring/reference/      # kube-prometheus-stack and metric config
-│   └── policies/reference/        # OPA Gatekeeper templates and constraints
+│   ├── clusters/reference/        # Flux bootstrap and cluster entry point
+│   ├── infrastructure/            # cloudflared and edge plumbing
+│   ├── apps/                      # demo workloads only
+│   ├── monitoring/                # kube-prometheus-stack and ServiceMonitors
+│   └── policies/                  # Gatekeeper install, templates, and constraints
 ├── docs/
 │   ├── architecture.md
 │   ├── design/
 │   ├── security/
 │   ├── operations/
 │   └── case-studies/
-└── tests/
-    ├── gatekeeper/
-    └── manifests/
+├── tests/
+│   ├── gatekeeper/                # rejected policy fixtures
+│   └── manifests/
+├── workers/
+│   └── public-telemetry/          # Cloudflare Worker for sanitized telemetry
+└── renovate.json                  # dependency and image update rules
+```
+
+## Local validation
+
+Render the GitOps entry points before trusting Flux to reconcile them:
+
+```sh
+kubectl kustomize GitOps/clusters/reference
+kubectl kustomize GitOps/infrastructure/reference
+kubectl kustomize GitOps/apps/reference
+kubectl kustomize GitOps/monitoring/reference
+kubectl kustomize GitOps/policies/reference
+```
+
+Validate the public telemetry Worker locally:
+
+```sh
+npm --prefix workers/public-telemetry test
+npm --prefix workers/public-telemetry run typecheck
+```
+
+Check the live cluster, assuming the local tunnel is open:
+
+```sh
+kubectl --context k8s-platform-reference get nodes
+kubectl --context k8s-platform-reference get kustomizations -A
+kubectl --context k8s-platform-reference get helmreleases -A
+kubectl --context k8s-platform-reference get constrainttemplates,constraints -A
 ```
 
 ## Status
 
-Phase 0: repository scaffold and design docs.
+Live baseline as of this README update:
 
-The next milestone is a real K3s cluster bootstrapped from this repository with Flux reconciliation working end to end.
+- One K3s node: `reference-01`
+- Flux Kustomizations: 5 ready
+- Helm releases: Gatekeeper and kube-prometheus-stack ready
+- Gatekeeper constraints: 2 enforced, 0 violations
+- Public telemetry: online at `https://api.s34nj0hn.dev/cluster/heartbeat`
+
+Next useful improvements are app-level NetworkPolicies, SOPS/age-managed encrypted secrets, stronger manifest validation in CI, and an expanded but still explainable Gatekeeper policy set.
