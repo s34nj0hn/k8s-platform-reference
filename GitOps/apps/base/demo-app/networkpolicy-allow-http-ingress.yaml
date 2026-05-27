@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-http-ingress
+  namespace: demo-app
+  labels:
+    app.kubernetes.io/name: demo-app
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: reference-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: demo-app
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: demo-app
+        - namespaceSelector:
+            matchLabels:
+              platform.s34nj0hn.dev/purpose: observability
+      ports:
+        - protocol: TCP
+          port: 8080

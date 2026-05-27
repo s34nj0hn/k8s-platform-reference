@@ -1,0 +1,14 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: demo-app
+  labels:
+    app.kubernetes.io/name: demo-app
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: reference-platform
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

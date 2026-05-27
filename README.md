@@ -47,7 +47,7 @@ This repo should stay honest.
 
 SOPS + age is the intended GitOps secret pattern, but the current Cloudflare tunnel token is still created out-of-band and is not committed to Git. That is safer than committing plaintext, but it is not the final encrypted-secret workflow.
 
-App-level NetworkPolicies are documented as the target model, but they are not yet implemented for `demo-app`. The only NetworkPolicies currently present are the Flux bootstrap policies generated with Flux.
+App-level NetworkPolicies are implemented for `demo-app`: the namespace starts from default-deny, allows DNS egress to CoreDNS, and allows HTTP ingress only from the demo namespace and observability namespace.
 
 This repo also does not claim full Kubernetes security coverage. Gatekeeper currently enforces a narrow v1 policy set: required namespace ownership/purpose labels and no privileged app pods. It does not replace Pod Security Admission, RBAC review, image scanning, runtime detection, host hardening, backup testing, or incident response.
 
@@ -144,4 +144,4 @@ Live baseline as of this README update:
 - Gatekeeper constraints: 2 enforced, 0 violations
 - Public telemetry: online at `https://api.s34nj0hn.dev/cluster/heartbeat`
 
-Next useful improvements are app-level NetworkPolicies, SOPS/age-managed encrypted secrets, stronger manifest validation in CI, and an expanded but still explainable Gatekeeper policy set.
+Next useful improvements are SOPS/age-managed encrypted secrets, stronger manifest validation in CI, and an expanded but still explainable Gatekeeper policy set.
