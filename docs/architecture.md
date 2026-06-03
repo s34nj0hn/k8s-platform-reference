@@ -13,6 +13,7 @@ It can share the same physical network and the same operating lessons as earlier
 | Layer | Intended implementation |
 | --- | --- |
 | Kubernetes | K3s reference cluster |
+| Infrastructure as code | Terraform for platform primitives around the cluster |
 | GitOps | Flux + Kustomize |
 | Secrets | SOPS + age |
 | Ingress | Traefik |
@@ -27,3 +28,5 @@ It can share the same physical network and the same operating lessons as earlier
 The reference cluster should be rebuilt from Git without drama. If rebuilding it becomes scary, it has drifted into pet infrastructure.
 
 Public docs and telemetry should avoid names that reveal my home network, node naming scheme, internal addresses, service inventory, or storage layout.
+
+Terraform and Flux have separate ownership boundaries. Terraform may manage external platform primitives such as DNS, edge routing, repository governance, remote state, and later VM scaffolding. Flux owns Kubernetes resources under `GitOps/`. The two systems should not manage the same live Kubernetes object.

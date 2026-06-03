@@ -27,6 +27,7 @@ That last part matters. I would rather show a small set of working controls than
 - **Admission control:** OPA Gatekeeper blocks unlabeled application namespaces and privileged application pods.
 - **Network boundaries:** The demo app starts from default-deny NetworkPolicies and only opens the traffic it needs.
 - **Observability:** kube-prometheus-stack provides internal metrics and Grafana.
+- **Infrastructure as code boundary:** Terraform defines or adopts platform primitives around the cluster while Flux owns in-cluster Kubernetes resources.
 - **Safe public signal:** A Cloudflare Worker publishes sanitized aggregate cluster health without exposing raw cluster details.
 - **Operational honesty:** The docs call out real limits and planned improvements instead of pretending this is complete.
 
@@ -79,8 +80,9 @@ If you have ten minutes, read these in order:
 3. `docs/security/network-policy-model.md` — how demo app traffic is constrained.
 4. `docs/security/public-telemetry-contract.md` — what the public heartbeat may expose.
 5. `docs/operations/public-telemetry-worker-runbook.md` — how the Worker reaches private Grafana.
-6. `GitOps/clusters/reference/` — the Flux entry point.
-7. `docs/roadmap.md` — planned improvements and intentional non-goals.
+6. `docs/case-studies/02-terraform-gitops-boundary.md` — what Terraform owns and what Flux owns.
+7. `GitOps/clusters/reference/` — the Flux entry point.
+8. `docs/roadmap.md` — planned improvements and intentional non-goals.
 
 Then hit the heartbeat endpoint. The goal is to prove the platform is live without giving the public internet a map of the private cluster.
 
@@ -109,6 +111,8 @@ Those are real areas of work. They are tracked in `docs/roadmap.md` so the READM
 │   ├── apps/                      # demo workloads only
 │   ├── monitoring/                # kube-prometheus-stack and ServiceMonitors
 │   └── policies/                  # Gatekeeper install, templates, and constraints
+├── Terraform/
+│   └── cloudflare-edge/           # read/adopt public edge resources
 ├── docs/
 │   ├── architecture.md
 │   ├── roadmap.md
