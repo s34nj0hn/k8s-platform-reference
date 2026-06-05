@@ -20,9 +20,20 @@ rendered/
 
 # Local planning notes
 docs/plans/
+.hermes/
 
 # Package dependencies
 node_modules/
 
 # Local git worktrees
 .worktrees/
+
+# Terraform local state and plans
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/crash.log
+**/crash.*.log
+**/*.auto.tfvars
+**/*.tfvars

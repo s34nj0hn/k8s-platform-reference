@@ -6,6 +6,17 @@ The rule for this repo is simple: only claim what exists, and keep future work v
 
 ## Next Useful Improvements
 
+### Terraform platform foundation
+
+The reference platform now has a Terraform layer for infrastructure around the cluster. The first root is intentionally read-only: it validates Cloudflare provider auth and reads the `s34nj0hn.dev` zone before adopting edge resources.
+
+Planned work:
+
+- Import or adopt one low-risk Cloudflare edge resource related to `api.s34nj0hn.dev`.
+- Document the post-import drift cleanup process.
+- Choose and document a remote state backend before Terraform manages production-impacting resources.
+- Keep Terraform out of Flux-owned Kubernetes resources.
+
 ### SOPS and age-managed secrets
 
 The intended GitOps secret pattern is SOPS with age. The current Cloudflare tunnel token is created out-of-band and is not committed to Git. That is safer than plaintext secrets, but it is not the final encrypted-secret workflow.
