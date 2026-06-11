@@ -1,2 +1,4 @@
-# Import blocks will go here after the first read-only provider check passes.
-# The first import target should be a low-risk Cloudflare edge resource related to api.s34nj0hn.dev.
+import {
+  to = cloudflare_record.api
+  id = "cc6cac97ca14b22ddd72aa91c772ec5d/b166554c18226c90b37d46969c0fda46"
+}
