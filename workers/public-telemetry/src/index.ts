@@ -1,5 +1,5 @@
 import { fetchMetrics, type Env } from "./metrics"
-import { boundedErrorResponse, corsResponse, jsonResponse } from "./response"
+import { boundedErrorResponse, corsResponse, jsonResponse, rateLimitedResponse } from "./response"
 
 const DEFAULT_CACHE_TTL_SECONDS = 30
 
@@ -19,6 +19,10 @@ export default {
     const url = new URL(request.url)
     if (url.pathname !== "/cluster/heartbeat") {
       return corsResponse({ status: 404 })
+    }
+
+    if (await isRateLimited(request, env)) {
+      return rateLimitedResponse()
     }
 
     const cacheTtl = cacheTtlSeconds(env.CACHE_TTL_SECONDS)
@@ -42,6 +46,25 @@ export default {
       return boundedErrorResponse()
     }
   },
+}
+
+// Rate limiting runs before the cache lookup so abuse is rejected cheaply and
+// on every request, not only on cache misses.
+//
+// This fails open. If the binding is absent, requests are served rather than
+// refused. The limiter guards against volume, not against unauthorized access,
+// and the fixed server-side queries are what actually bound what a caller can
+// reach. Refusing all traffic because a binding is missing would trade a real
+// outage for a theoretical one.
+async function isRateLimited(request: Request, env: Env): Promise<boolean> {
+  if (!env.RATE_LIMITER) {
+    return false
+  }
+
+  const key = request.headers.get("cf-connecting-ip") ?? "unknown"
+  const { success } = await env.RATE_LIMITER.limit({ key })
+
+  return !success
 }
 
 function cacheTtlSeconds(rawValue: string | undefined): number {
