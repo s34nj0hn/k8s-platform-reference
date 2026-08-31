@@ -4,18 +4,36 @@ This file keeps planned work out of the README so the README can stay focused on
 
 The rule for this repo is simple: only claim what exists, and keep future work visible enough that a reviewer can see the direction.
 
+That rule cuts both ways. Work that has shipped should not still be listed as planned.
+
+## Recently Shipped
+
+- **Terraform remote state.** State for `cloudflare-edge` lives in HCP Terraform, workspace `k8s-platform-reference-cloudflare-edge`, in local execution mode so Cloudflare credentials stay on the operator machine.
+- **Portfolio consumption of the heartbeat.** The public site at `https://s34nj0hn.dev` reads the sanitized heartbeat directly.
+- **Response caching.** The Worker serves from the Cloudflare cache with a 30 second default TTL, bounded to 300 seconds, so Grafana is not turned into a public query target.
+
+## Corrected
+
+- **Released the `api.s34nj0hn.dev` DNS record.** Terraform adopted this record in May. It should not have. `wrangler.toml` declares the hostname as a Worker custom domain, which makes Cloudflare Workers create and manage the underlying record, so two systems held a claim on one object. Wrangler recreated the record on a later deploy, the record ID in Terraform state went stale, and `terraform plan` began proposing to create a record that already existed.
+
+  The record was released with `terraform state rm`, not `terraform destroy`, so the live record was never touched. The boundary check in `docs/operations/terraform-runbook.md` now asks about Wrangler as well as Flux.
+
 ## Next Useful Improvements
 
-### Terraform platform foundation
+### Edge security posture
 
-The reference platform now has a Terraform layer for infrastructure around the cluster. The first root is intentionally read-only: it validates Cloudflare provider auth and reads the `s34nj0hn.dev` zone before adopting edge resources.
+Releasing the DNS record left this root with nothing to manage, so it needed resources that are genuinely Terraform-owned.
 
-Planned work:
+A rate limiting ruleset was the first attempt and was abandoned: Cloudflare gates the `http_ratelimit` phase behind the paid WAF add-on. Rate limiting moved into the Worker, which has a binding for it at no cost, and Terraform took the zone security posture instead.
 
-- Import or adopt one low-risk Cloudflare edge resource related to `api.s34nj0hn.dev`.
-- Document the post-import drift cleanup process.
-- Choose and document a remote state backend before Terraform manages production-impacting resources.
-- Keep Terraform out of Flux-owned Kubernetes resources.
+`zone-settings.tf` declares TLS posture. `caa.tf` restricts which certificate authorities may issue for the domain. Neither has been applied yet, so the zone does not currently carry either. The remaining work below is what applying them requires.
+
+Remaining work:
+
+- Verify the CAA issuer list against Cloudflare's current documented set, then apply. A wrong list does not fail at apply time; it fails weeks later when Universal SSL cannot renew.
+- Apply zone settings and confirm nothing on the zone depended on TLS 1.0 or 1.1.
+- Raise HSTS `max_age` from one day to one year once every hostname is confirmed HTTPS-only.
+- Delete the leftover local `terraform.tfstate`, `terraform.tfstate.backup`, and `import-api.tfplan`.
 
 ### SOPS and age-managed secrets
 
@@ -51,15 +69,17 @@ Planned work:
 - Keep platform namespace exemptions explicit.
 - Document every enforced policy in human language before expanding the catalog.
 
-### Public portfolio integration
+### External availability monitoring
 
-The public heartbeat endpoint exists. The next step is to make the portfolio consume it in a way that is useful but not noisy.
+The heartbeat is now the front door: the portfolio site renders it, so an outage is visible to visitors before it is visible to me.
+
+Nothing currently watches it from outside. Prometheus runs inside the cluster the endpoint reports on, which means the system that would raise the alarm fails at the same moment the endpoint does.
 
 Planned work:
 
-- Display sanitized cluster health on the portfolio site.
-- Cache public responses so Grafana is not turned into a public query target.
-- Keep the UI clear that this is a reference platform, not a production SLA.
+- Add an external blackbox check against `GET /cluster/heartbeat`.
+- Alert on non-200 responses and on `status: "error"` bodies, which return HTTP 502 by design.
+- Keep the check outside the reference cluster so it survives a cluster or tunnel outage.
 
 ## Deliberately Not In Scope Yet
 
