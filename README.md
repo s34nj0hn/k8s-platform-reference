@@ -2,7 +2,7 @@
 
 I build infrastructure that still makes sense when you come back to it six months later.
 
-This is a small, live Kubernetes platform I run as a portfolio artifact. It is a real K3s cluster reconciled from Git, with a few controls that actually enforce, documented well enough that you can check my work instead of taking my word for it.
+This is a small, live Kubernetes platform I run as a portfolio artifact. It is a real K3s cluster reconciled from Git, with a few controls that enforce rather than warn, documented well enough that you can check my work instead of taking my word for it.
 
 It is deliberately small. One node, one boring demo app. The platform is the subject, and the app is just something for it to hold.
 
@@ -26,7 +26,7 @@ $ curl -s https://api.s34nj0hn.dev/cluster/heartbeat
  "gatekeeper_constraints":2,"gatekeeper_violations":0,"last_reconcile_age_seconds":296}
 ```
 
-`last_reconcile_age_seconds` is the honest field. If Flux stops, that number climbs and you can watch it happen.
+`last_reconcile_age_seconds` is the field that would give me away. If Flux stops, that number climbs and anyone watching can see it.
 
 ## How it is built
 
@@ -42,7 +42,7 @@ A Cloudflare Worker publishes the sanitized heartbeat above. Terraform owns edge
 
 ## The Terraform boundary, including where I got it wrong
 
-Terraform currently manages zero resources. That is not an oversight, it is the result of a correction worth reading.
+Terraform currently manages zero resources. That is the result of a mistake I made and then undid.
 
 In May I had Terraform adopt the `api.s34nj0hn.dev` DNS record. That was a mistake. `wrangler.toml` declares the same hostname as a Worker custom domain, which makes Cloudflare Workers create and manage the underlying record. Two systems held a claim on one object. Wrangler recreated the record on a later deploy, the ID in Terraform state went stale, and `terraform plan` started proposing to create a record that already existed.
 
@@ -52,11 +52,11 @@ I released it with `terraform state rm` rather than `terraform destroy`, so the 
 
 ## Running a monitoring stack on a small node
 
-The VM has 3.9Gi of RAM. That is a real constraint, and working inside it produced the most interesting problem here.
+The VM has 3.9Gi of RAM. Fitting a monitoring stack inside that turned up a problem specific to single-node K3s.
 
 On single-node K3s the kubelet and the apiserver are the same process, so the kubelet metrics endpoint re-exposes the entire apiserver and etcd registry. kube-prometheus-stack scrapes both targets and stored every apiserver histogram bucket twice. Dropping the duplicates from the kubelet target took active series from 104,285 to 75,209 and returned roughly 200Mi to the node. Prometheus now runs with a memory limit, so it can no longer take the node down by itself.
 
-One result is unresolved. The kubelet job fell from 57,599 series to 16,057 exactly as designed, but the apiserver job rose from 36,721 to 49,202, which it should not have. I measured that minutes after a Prometheus restart, so it may be churn that has not aged out of the head block. I am rechecking rather than writing it up as a clean win.
+One result is unresolved. The kubelet job fell from 57,599 series to 16,057 as designed, but the apiserver job rose from 36,721 to 49,202, which it should not have. I measured that minutes after a Prometheus restart, so it may be churn that has not aged out of the head block. I am rechecking rather than writing it up as a clean win.
 
 ## What this does not claim
 
