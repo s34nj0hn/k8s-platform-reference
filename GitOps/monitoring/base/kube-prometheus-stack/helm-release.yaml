@@ -30,14 +30,38 @@ spec:
           memory: 96Mi
       service:
         type: ClusterIP
+    # On single-node K3s the kubelet and the apiserver are the same process, so the
+    # kubelet /metrics endpoint re-exposes the entire apiserver and etcd registry.
+    # kube-prometheus-stack scrapes both targets, storing every apiserver histogram
+    # bucket twice. Dropping the duplicates from the kubelet target costs no data
+    # because the apiserver target still provides them.
+    kubelet:
+      serviceMonitor:
+        metricRelabelings:
+          - sourceLabels: [__name__]
+            action: drop
+            regex: (apiserver|etcd|workqueue)_.*_bucket
+    # These three are high-cardinality and unused by the bundled dashboards.
+    kubeApiServer:
+      serviceMonitor:
+        metricRelabelings:
+          - sourceLabels: [__name__]
+            action: drop
+            regex: apiserver_(request_body_size_bytes|watch_events_sizes|watch_cache_read_wait_seconds)_bucket
     prometheus:
       prometheusSpec:
-        retention: 2d
+        # Raised from 2d once cardinality dropped. 2d was too short to diagnose a
+        # multi-week memory trend, which is the reason this change exists.
+        retention: 7d
         retentionSize: 4GiB
         resources:
           requests:
             cpu: 100m
             memory: 512Mi
+          # Prometheus previously ran with no ceiling and reached 750Mi on a 3.9Gi
+          # node. The limit bounds the blast radius to the pod instead of the node.
+          limits:
+            memory: 900Mi
     prometheusOperator:
       resources:
         requests:
