@@ -5,14 +5,24 @@ Terraform manages platform primitives around the reference cluster. Flux manages
 ## Current Roots
 
 ```text
-cloudflare-edge/  # read/adopt public edge resources for s34nj0hn.dev
+cloudflare-edge/  # edge controls for s34nj0hn.dev
 ```
+
+State lives in HCP Terraform, not on disk. See `docs/operations/terraform-state.md`.
 
 ## Ownership Boundary
 
-Terraform may manage or adopt DNS, Cloudflare edge routing, repository governance, remote state, and later host/VM scaffolding.
+Terraform may manage repository governance, remote state, edge security posture such as zone TLS settings and CAA records, and later host/VM scaffolding.
 
 Terraform must not manage Flux-owned Kubernetes resources under `GitOps/`. If both Terraform and Flux think they own the same live object, the platform has two controllers fighting over one resource.
+
+Flux is not the only other claimant. Anything that provisions on its own owns what it creates:
+
+- **Wrangler** creates and manages the DNS record for any Worker route declared with `custom_domain = true`. That is why `api.s34nj0hn.dev` is not a Terraform resource.
+- **`cloudflared tunnel route dns`** creates the DNS record for a tunnel hostname.
+- **Controllers that write back to their own resources** own what they write.
+
+The test is not "can Terraform manage this?" It is "does something else already create this?" A record that appears in the Cloudflare dashboard looks adoptable whether or not another system owns it.
 
 ## Local Workflow
 

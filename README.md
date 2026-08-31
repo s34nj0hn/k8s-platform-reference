@@ -27,7 +27,7 @@ That last part matters. I would rather show a small set of working controls than
 - **Admission control.** OPA Gatekeeper blocks unlabeled application namespaces and privileged application pods.
 - **Network boundaries.** The demo app starts from default-deny NetworkPolicies and only opens the traffic it needs.
 - **Observability.** kube-prometheus-stack provides internal metrics and Grafana.
-- **Infrastructure as code boundary.** Terraform defines or adopts platform primitives around the cluster while Flux owns in-cluster Kubernetes resources.
+- **Infrastructure as code boundary.** Flux owns in-cluster Kubernetes resources. Terraform owns edge primitives around the cluster, and currently owns none, because the one record it adopted turned out to belong to Cloudflare Workers and was released. The reasoning is in `docs/case-studies/02-terraform-gitops-boundary.md`.
 - **Safe public signal.** A Cloudflare Worker publishes sanitized aggregate cluster health without exposing raw cluster details, behind a response cache and a per-IP rate limit.
 - **Operational honesty.** The docs call out real limits and planned improvements instead of pretending this is complete.
 
@@ -42,12 +42,14 @@ Current pieces:
 - OPA Gatekeeper installed by Helm
 - Two enforced Gatekeeper constraints with zero current violations
 - App-level NetworkPolicies for `demo-app`
-- kube-prometheus-stack installed by Helm
+- kube-prometheus-stack installed by Helm, 7 day retention, scrape targets tuned to fit the node
 - Cloudflare Tunnel for private Grafana access
 - Cloudflare Worker at `https://api.s34nj0hn.dev/cluster/heartbeat`, rate limited per client IP
 - A deliberately boring `demo-app` workload using unprivileged nginx with resource requests, limits, and a restricted container security context
 
 The demo app is boring on purpose. It is there so the platform has something safe to admit, monitor, and restrict. The platform is the point.
+
+The VM has 3.9Gi of RAM, which is a real constraint rather than a footnote. On single-node K3s the kubelet and the apiserver are one process, so the kubelet scrape target re-exposes the entire apiserver and etcd registry and kube-prometheus-stack stores every histogram bucket twice. Dropping the duplicates from the kubelet target cut active series from 104,285 to 75,209 and gave the node back about 200Mi. Prometheus also runs with a memory limit now, so it cannot take the node down on its own.
 
 ## Live proof
 
@@ -103,6 +105,9 @@ It does not claim:
 - backup and disaster-recovery proof
 - host-hardening coverage
 - encrypted GitOps secrets for every secret yet
+- continuous integration, since this repo has no CI and the checks under Local validation are run by hand
+- Terraform-managed edge resources, since that root currently manages none
+- a track record of automated dependency updates, since Renovate was only pointed at this repo on 2026-08-31
 
 Those are real areas of work. They are tracked in `docs/roadmap.md` so the README can stay focused on what exists today.
 
@@ -116,7 +121,7 @@ Those are real areas of work. They are tracked in `docs/roadmap.md` so the READM
 │   ├── monitoring/                # kube-prometheus-stack and ServiceMonitors
 │   └── policies/                  # Gatekeeper install, templates, and constraints
 ├── Terraform/
-│   └── cloudflare-edge/           # read/adopt public edge resources
+│   └── cloudflare-edge/           # Cloudflare zone edge root, state in HCP Terraform
 ├── docs/
 │   ├── architecture.md
 │   ├── roadmap.md
@@ -164,8 +169,13 @@ kubectl --context k8s-platform-reference get constrainttemplates,constraints -A
 - One K3s node: `reference-01`
 - Flux Kustomizations: 5 ready
 - Helm releases: Gatekeeper and kube-prometheus-stack ready
-- Gatekeeper constraints: 2 enforced, 0 violations
+- Gatekeeper constraints: 2 enforced, 0 violations, and `tests/gatekeeper/privileged-pod.yaml` is rejected by the admission webhook rather than merely warned about
 - Public telemetry: online at `https://api.s34nj0hn.dev/cluster/heartbeat`, cached and rate limited
+- Terraform: state in HCP Terraform, zero managed resources
+
+Verified against the live cluster on 2026-08-31.
+
+One thing is open rather than finished. After the scrape-target change, the kubelet job fell from 57,599 series to 16,057 as designed, but the apiserver job rose from 36,721 to 49,202, which it should not have. That was measured minutes after a Prometheus restart, so it may be churn that has not aged out of the head block. It is being rechecked. I would rather leave that here than round it up into a clean number.
 
 Maintainer: Sean
 
