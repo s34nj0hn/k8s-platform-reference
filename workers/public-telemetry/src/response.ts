@@ -16,7 +16,7 @@ export type PublicTelemetryResponse = {
 
 export type ErrorResponse = {
   status: "error"
-  code: 502
+  code: 502 | 429
 }
 
 export function jsonResponse(body: PublicTelemetryResponse | ErrorResponse, init: ResponseInit = {}): Response {
@@ -32,6 +32,13 @@ export function jsonResponse(body: PublicTelemetryResponse | ErrorResponse, init
 
 export function boundedErrorResponse(): Response {
   return jsonResponse({ status: "error", code: 502 }, { status: 502 })
+}
+
+export function rateLimitedResponse(): Response {
+  return jsonResponse({ status: "error", code: 429 }, {
+    status: 429,
+    headers: { "retry-after": "60" },
+  })
 }
 
 export function corsResponse(init: ResponseInit = {}): Response {

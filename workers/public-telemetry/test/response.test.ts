@@ -96,6 +96,57 @@ describe("public telemetry worker", () => {
     fetchMock.mockRestore()
   })
 
+  it("refuses a rate limited client without calling the backend", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+    const limit = vi.fn().mockResolvedValue({ success: false })
+
+    const response = await worker.fetch(
+      new Request("https://api.s34nj0hn.dev/cluster/heartbeat", { headers: { "cf-connecting-ip": "203.0.113.7" } }),
+      { ...env, RATE_LIMITER: { limit } },
+      executionContext(),
+    )
+
+    expect(response.status).toBe(429)
+    expect(response.headers.get("retry-after")).toBe("60")
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://s34nj0hn.dev")
+    await expect(response.json()).resolves.toEqual({ status: "error", code: 429 })
+
+    expect(limit).toHaveBeenCalledWith({ key: "203.0.113.7" })
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    fetchMock.mockRestore()
+  })
+
+  it("serves normally when the rate limiter allows the request", async () => {
+    const limit = vi.fn().mockResolvedValue({ success: true })
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      results: { node_count: { frames: [{ data: { values: [[1700000000], [1]] } }] } },
+    }), { status: 200 }))
+
+    const response = await worker.fetch(
+      new Request("https://api.s34nj0hn.dev/cluster/heartbeat", { headers: { "cf-connecting-ip": "203.0.113.7" } }),
+      { ...env, RATE_LIMITER: { limit } },
+      executionContext(),
+    )
+
+    expect(response.status).toBe(200)
+    expect(limit).toHaveBeenCalledOnce()
+
+    fetchMock.mockRestore()
+  })
+
+  it("serves normally when no rate limiter is bound", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      results: { node_count: { frames: [{ data: { values: [[1700000000], [1]] } }] } },
+    }), { status: 200 }))
+
+    const response = await worker.fetch(new Request("https://api.s34nj0hn.dev/cluster/heartbeat"), env, executionContext())
+
+    expect(response.status).toBe(200)
+
+    fetchMock.mockRestore()
+  })
+
   it("returns a bounded error when the backend fails", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response("backend failed", { status: 500 }))
 

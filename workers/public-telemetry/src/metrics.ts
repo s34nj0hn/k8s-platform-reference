@@ -1,10 +1,15 @@
 import type { PublicTelemetryResponse } from "./response"
 
+export type RateLimiter = {
+  limit(options: { key: string }): Promise<{ success: boolean }>
+}
+
 export type Env = {
   METRICS_BACKEND_URL?: string
   GRAFANA_URL?: string
   GRAFANA_TOKEN: string
   CACHE_TTL_SECONDS?: string
+  RATE_LIMITER?: RateLimiter
 }
 
 type GrafanaFrame = {
