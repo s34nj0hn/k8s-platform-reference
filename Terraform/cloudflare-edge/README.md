@@ -2,7 +2,7 @@
 
 This root manages edge controls for `s34nj0hn.dev`. It is small on purpose.
 
-It owns the zone's security posture: TLS settings and CAA records. It reads the DNS zone. It owns nothing else.
+It owns the zone's TLS and browser cache settings, which are applied. It declares CAA records, which are not applied yet. It reads the DNS zone. It owns nothing else.
 
 ## What This Teaches
 
@@ -62,7 +62,7 @@ terraform validate
 terraform plan
 ```
 
-Expected result on a clean tree: no changes.
+Expected result on a clean tree: no changes to the zone settings, and 8 CAA records to add until `caa.tf` is applied. Apply the zone settings alone with `-target=cloudflare_zone_settings_override.main` until then.
 
 ## Why Provider Version 4.x
 

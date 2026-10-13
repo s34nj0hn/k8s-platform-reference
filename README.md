@@ -46,13 +46,15 @@ A Cloudflare Worker publishes the sanitized heartbeat above. Terraform owns edge
 
 ## The Terraform boundary, including where I got it wrong
 
-Terraform currently manages zero resources. That is the result of a mistake I made and then undid.
+Terraform manages one resource, the zone's TLS and cache settings. Until 2026-10-13 it managed none, the result of a mistake I made and then undid.
 
 In May I had Terraform adopt the `api.s34nj0hn.dev` DNS record. That was a mistake. `wrangler.toml` declares the same hostname as a Worker custom domain, which makes Cloudflare Workers create and manage the underlying record. Two systems held a claim on one object. Wrangler recreated the record on a later deploy, the ID in Terraform state went stale, and `terraform plan` started proposing to create a record that already existed.
 
 I released it with `terraform state rm` rather than `terraform destroy`, so the live record was never touched. The ownership check in the runbook now asks about Wrangler as well as Flux.
 
-`caa.tf` and `zone-settings.tf` are written and **not applied**. `dig CAA s34nj0hn.dev` returns nothing and the endpoint sends no HSTS header. They are in the repo so the intent is reviewable, not because the zone carries them.
+`zone-settings.tf` is applied. Every hostname on the zone redirects HTTP to HTTPS, refuses TLS below 1.2, and sends `Strict-Transport-Security: max-age=86400; includeSubDomains`. The Browser Cache TTL respects origin headers, so the heartbeat reaches browsers with its own `max-age=30` instead of Cloudflare's default 4 hours.
+
+`caa.tf` is written and **not applied**, so `dig CAA s34nj0hn.dev` returns nothing. Its issuer list has to be checked against the CAs Cloudflare uses first, because a wrong list does not fail at apply time. It fails weeks later, when Universal SSL cannot renew.
 
 ## Running a monitoring stack on a small node
 
@@ -67,7 +69,7 @@ One result is unresolved. The kubelet job fell from 57,599 series to 16,057 as d
 This is a reference platform, not a production Kubernetes program. It does not have:
 
 - continuous integration, since this repo has no CI and every check above is run by hand
-- Terraform-managed edge resources, since that root manages none today
+- Terraform-managed CAA records, since `caa.tf` is not applied yet
 - a track record of automated dependency updates, since Renovate was only pointed here on 2026-08-31
 - alert routing, since Alertmanager runs with the chart's default `null` receiver and delivers nothing anywhere
 - runtime detection, image scanning, or a proven backup and restore path
@@ -127,7 +129,7 @@ Verified against the live cluster on 2026-08-31.
 | Gatekeeper | 2 constraints enforcing, 0 violations, fixture rejected by the webhook |
 | Prometheus | 7 day retention, 900Mi limit, 75,209 active series |
 | Public heartbeat | online, cached; per-IP limiter deployed, not observed enforcing |
-| Terraform | state in HCP Terraform, 0 managed resources |
+| Terraform | state in HCP Terraform, 1 managed resource (zone settings) |
 | CI | none |
 
 Maintainer: Sean

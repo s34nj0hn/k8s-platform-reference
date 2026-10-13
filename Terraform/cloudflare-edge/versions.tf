@@ -2,11 +2,10 @@ terraform {
   required_version = ">= 1.5.7"
 
   cloud {
-    # Yes, that is the real org name, and it is deliberate.
-    organization = "TST_ORG_PLS_IGNR"
+    organization = "s34nj0hn-org"
 
     workspaces {
-      name = "k8s-platform-reference-cloudflare-edge"
+      name = "k8s-reference-lab"
     }
   }
 

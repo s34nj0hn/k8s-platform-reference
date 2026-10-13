@@ -21,6 +21,11 @@ resource "cloudflare_zone_settings_override" "main" {
     tls_1_3                  = "on"
     opportunistic_encryption = "on"
 
+    # 0 is "Respect Existing Headers". The default of 4 hours replaces any shorter
+    # Cache-Control from the origin, which turned the heartbeat Worker's
+    # max-age=30 into max-age=14400 for browsers.
+    browser_cache_ttl = 0
+
     # HSTS is the one setting here with a lasting client-side effect. Browsers
     # honour max_age even if the header stops being sent, so this starts at one
     # day. Raise it to 31536000 once every hostname on the zone is confirmed

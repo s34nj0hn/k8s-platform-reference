@@ -10,7 +10,7 @@ That record has since been released, because Cloudflare Workers owns it. State n
 
 ## Current State Policy
 
-State for `Terraform/cloudflare-edge` lives in HCP Terraform (formerly Terraform Cloud), in the workspace `k8s-platform-reference-cloudflare-edge`.
+State for `Terraform/cloudflare-edge` lives in HCP Terraform (formerly Terraform Cloud), in the workspace `k8s-reference-lab` of the organization `s34nj0hn-org`.
 
 The backend is declared as a `cloud` block in `versions.tf`. That block cannot use variables, so the organization name is literal in the file.
 
@@ -35,7 +35,7 @@ HCP Terraform stores and locks state. Plans and applies still run on the operato
 
 This is deliberate. The alternative, remote execution, would require storing a Cloudflare API token in HCP Terraform so their runners could reach the provider. Local execution keeps provider credentials on one machine and limits the third party to state storage.
 
-The trade is that there is no run history or policy enforcement in the HCP Terraform UI. For a single-operator root managing one DNS record, that is an acceptable loss.
+The trade is that there is no run history or policy enforcement in the HCP Terraform UI. For a single-operator root managing one zone settings object, that is an acceptable loss.
 
 ## Who Can Read State
 
@@ -53,7 +53,7 @@ A crashed or interrupted run can leave a lock in place. Locks are cleared from t
 
 HCP Terraform retains previous state versions for the workspace. Rolling back is a rollback to a prior state version, not a restore from a file.
 
-If state is lost entirely, this root is cheap to rebuild. It manages a single zone ruleset, and a ruleset can be recreated from configuration rather than adopted, so recovery is `terraform init` followed by `terraform apply`.
+If state is lost entirely, this root is cheap to rebuild. It manages the zone settings object, which can be recreated from configuration rather than adopted, so recovery is `terraform init` followed by `terraform apply`.
 
 That is only true while the root stays this small. It stops being true as soon as this root manages something that must be adopted rather than recreated, which is the reason to keep state remote now rather than later.
 
