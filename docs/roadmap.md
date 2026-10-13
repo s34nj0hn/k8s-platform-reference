@@ -8,7 +8,7 @@ That rule cuts both ways. Work that has shipped should not still be listed as pl
 
 ## Recently Shipped
 
-- **Terraform remote state.** State for `cloudflare-edge` lives in HCP Terraform, workspace `k8s-platform-reference-cloudflare-edge`, in local execution mode so Cloudflare credentials stay on the operator machine.
+- **Terraform remote state.** State for `cloudflare-edge` lives in HCP Terraform, workspace `k8s-reference-lab` in organization `s34nj0hn-org`, in local execution mode so Cloudflare credentials stay on the operator machine.
 - **Portfolio consumption of the heartbeat.** The public site at `https://s34nj0hn.dev` reads the sanitized heartbeat directly.
 - **Response caching.** The Worker serves from the Cloudflare cache with a 30 second default TTL, bounded to 300 seconds, so Grafana is not turned into a public query target.
 

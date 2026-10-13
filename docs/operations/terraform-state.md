@@ -10,7 +10,7 @@ That record has since been released, because Cloudflare Workers owns it. State n
 
 ## Current State Policy
 
-State for `Terraform/cloudflare-edge` lives in HCP Terraform (formerly Terraform Cloud), in the workspace `k8s-platform-reference-cloudflare-edge`.
+State for `Terraform/cloudflare-edge` lives in HCP Terraform (formerly Terraform Cloud), in the workspace `k8s-reference-lab` of the organization `s34nj0hn-org`.
 
 The backend is declared as a `cloud` block in `versions.tf`. That block cannot use variables, so the organization name is literal in the file.
 
