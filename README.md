@@ -26,7 +26,7 @@ $ curl -s https://api.s34nj0hn.dev/cluster/heartbeat
  "gatekeeper_constraints":2,"gatekeeper_violations":0,"last_reconcile_age_seconds":33}
 ```
 
-`last_reconcile_age_seconds` is the field that would give me away. It counts seconds since a Flux Kustomization last reconciled, which is the step that applies Git to the cluster. Five Kustomizations on 10 minute intervals keep it low, and I measured 13 to 53 on a healthy day. If Flux stops, it climbs one per second until it reports 3600.
+`last_reconcile_age_seconds` is the field that would give me away. It counts seconds since a Flux Kustomization last reconciled, which is the step that applies Git to the cluster. Each Kustomization reconciles every 10 minutes, so on a healthy cluster it stays under about 600. A new commit makes them reconcile together, and after that the field runs from near 0 up to 600 between rounds. Past about 660, Flux has stopped. It climbs one per second until it reports 3600.
 
 `flux_ready` is true only when every GitRepository, HelmRepository, Kustomization, and HelmRelease reports `Ready=True` and all four Flux controllers answer their metrics scrape.
 
@@ -94,6 +94,8 @@ It returns no node names, pod names, namespace names, internal IPs, ingress host
 
 Two controls bound load. A 30 second response cache handles normal traffic, and a per-IP rate limiter runs before the cache is consulted so one caller cannot drive volume regardless of cache state. The limiter fails open. A missing binding serves traffic rather than refusing it, because the fixed queries are what bound what a caller can reach, and a missing binding should not take the endpoint down.
 
+The limiter is not proven in production. Under `wrangler dev` it allows 60 requests and returns 429 with `retry-after: 60` from the 61st. Against the deployed Worker, 287 requests from one IP over 75 seconds all returned 200. Until I find out why, treat the per-IP limit as configured, not enforced.
+
 Errors carry a status and a code and nothing else. An error is not an opportunity to leak what a success would not.
 
 ## Repository map
@@ -124,7 +126,7 @@ Verified against the live cluster on 2026-08-31.
 | Helm releases | Gatekeeper 3.23.1 and kube-prometheus-stack, both Ready |
 | Gatekeeper | 2 constraints enforcing, 0 violations, fixture rejected by the webhook |
 | Prometheus | 7 day retention, 900Mi limit, 75,209 active series |
-| Public heartbeat | online, cached, rate limited |
+| Public heartbeat | online, cached; per-IP limiter deployed, not observed enforcing |
 | Terraform | state in HCP Terraform, 0 managed resources |
 | CI | none |
 
