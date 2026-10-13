@@ -19,7 +19,10 @@ function executionContext(): ExecutionContext {
   return {
     passThroughOnException: vi.fn(),
     waitUntil: vi.fn(),
+    abort: vi.fn(),
+    exports: {},
     props: {},
+    tracing: {} as Tracing,
   }
 }
 
