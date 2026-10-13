@@ -9,6 +9,19 @@
       "description": "Group Kubernetes platform image updates",
       "matchDatasources": ["docker"],
       "groupName": "container images"
+    },
+    {
+      "description": "Flux controller images must move with their CRDs, so only the flux manager may touch the generated system manifest",
+      "matchManagers": ["kubernetes"],
+      "matchFileNames": ["GitOps/clusters/reference/flux-system/gotk-components.yaml"],
+      "enabled": false
+    },
+    {
+      "description": "Renovate has bumped only the version header of the system manifest before, so every Flux PR carries the regenerate command",
+      "matchManagers": ["flux"],
+      "prBodyNotes": [
+        "Before merging, confirm the controller images and CRDs changed, not only the version header. If they did not, regenerate the manifest with `flux install --export --version={{{newVersion}}} > GitOps/clusters/reference/flux-system/gotk-components.yaml` and push it to this branch."
+      ]
     }
   ]
 }
