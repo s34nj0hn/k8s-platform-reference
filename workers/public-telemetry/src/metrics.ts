@@ -33,10 +33,15 @@ const FIXED_QUERIES = {
   cpu_usage_pct: "avg(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100))",
   memory_usage_pct: "avg((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100)",
   pvc_bound: "sum(kube_persistentvolumeclaim_status_phase{phase=\"Bound\"})",
-  flux_ready: "(sum(apiserver_storage_objects{job=\"apiserver\",resource=\"kustomizations.kustomize.toolkit.fluxcd.io\"}) >= bool 5) * (sum(apiserver_storage_objects{job=\"apiserver\",resource=\"helmreleases.helm.toolkit.fluxcd.io\"}) >= bool 2)",
+  // Every Flux object reports Ready=True and all four controllers are scraped up.
+  // An empty result reads as 0, so a missing series makes this false, not true.
+  flux_ready: "(count({__name__=~\"gotk_(gitrepository|helmrepository|kustomization|helmrelease)_info\",ready=\"True\"}) == bool count({__name__=~\"gotk_(gitrepository|helmrepository|kustomization|helmrelease)_info\"})) * (count(up{namespace=\"flux-system\"} == 1) >= bool 4)",
   gatekeeper_constraints: "sum(apiserver_storage_objects{job=\"apiserver\",resource=~\"k8srequirednamespacelabels.constraints.gatekeeper.sh|k8sdisallowprivileged.constraints.gatekeeper.sh\"})",
   gatekeeper_violations: "sum(gatekeeper_violations)",
-  last_reconcile_age_seconds: "clamp_min(300 - max(rate(gotk_reconcile_duration_seconds_count[5m])) * 300, 0)",
+  // Seconds since any Kustomization last reconciled, which is the step that applies
+  // Git to the cluster. Reads up to about a minute low because the 1m increase window
+  // needs two 30s scrapes. Reports 3600 when nothing reconciled in the last hour.
+  last_reconcile_age_seconds: "(time() - max(max_over_time(timestamp(increase(gotk_reconcile_duration_seconds_count{kind=\"Kustomization\"}[1m]) > 0)[1h:15s]))) or vector(3600)",
 } as const
 
 type MetricName = keyof typeof FIXED_QUERIES
