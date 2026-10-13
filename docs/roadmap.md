@@ -10,6 +10,7 @@ That rule cuts both ways. Work that has shipped should not still be listed as pl
 
 - **Terraform remote state.** State for `cloudflare-edge` lives in HCP Terraform, workspace `k8s-reference-lab` in organization `s34nj0hn-org`, in local execution mode so Cloudflare credentials stay on the operator machine.
 - **Portfolio consumption of the heartbeat.** The public site at `https://s34nj0hn.dev` reads the sanitized heartbeat directly.
+- **Zone TLS posture.** Applied on 2026-10-13. Every hostname redirects HTTP to HTTPS, refuses TLS below 1.2, and sends a one-day HSTS header with `includeSubDomains`. Browser Cache TTL respects origin headers, so the heartbeat's `max-age=30` reaches browsers. All 11 web hostnames were checked over HTTPS before and after.
 - **Response caching.** The Worker serves from the Cloudflare cache with a 30 second default TTL, bounded to 300 seconds, so Grafana is not turned into a public query target.
 
 ## Corrected
@@ -26,12 +27,11 @@ Releasing the DNS record left this root with nothing to manage, so it needed res
 
 A rate limiting ruleset was the first attempt and was abandoned: Cloudflare gates the `http_ratelimit` phase behind the paid WAF add-on. Rate limiting moved into the Worker, which has a binding for it at no cost, and Terraform took the zone security posture instead.
 
-`zone-settings.tf` declares TLS posture. `caa.tf` restricts which certificate authorities may issue for the domain. Neither has been applied yet, so the zone does not currently carry either. The remaining work below is what applying them requires.
+`zone-settings.tf` declares TLS posture and is applied. `caa.tf` restricts which certificate authorities may issue for the domain and is not applied yet. The remaining work is below.
 
 Remaining work:
 
 - Verify the CAA issuer list against Cloudflare's current documented set, then apply. A wrong list does not fail at apply time; it fails weeks later when Universal SSL cannot renew.
-- Apply zone settings and confirm nothing on the zone depended on TLS 1.0 or 1.1.
 - Raise HSTS `max_age` from one day to one year once every hostname is confirmed HTTPS-only.
 - Delete the leftover local `terraform.tfstate`, `terraform.tfstate.backup`, and `import-api.tfplan`.
 
