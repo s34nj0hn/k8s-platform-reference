@@ -67,11 +67,85 @@ spec:
         requests:
           cpu: 25m
           memory: 96Mi
+    # Flux 2.x controllers do not export a Ready-condition metric. Following Flux's
+    # monitoring guide, kube-state-metrics reads Ready from the Flux objects and
+    # exports gotk_<kind>_info{ready="True|False|Unknown"}. Each kind needs its own
+    # metric name because kube-state-metrics v2.15.0 emits only one resource's series
+    # when several share a name. The public heartbeat's flux_ready reads these.
     kube-state-metrics:
       resources:
         requests:
           cpu: 25m
           memory: 64Mi
+      rbac:
+        extraRules:
+          - apiGroups:
+              - source.toolkit.fluxcd.io
+              - kustomize.toolkit.fluxcd.io
+              - helm.toolkit.fluxcd.io
+            resources:
+              - gitrepositories
+              - helmrepositories
+              - kustomizations
+              - helmreleases
+            verbs: [list, watch]
+      customResourceState:
+        enabled: true
+        config:
+          spec:
+            resources:
+              - groupVersionKind: {group: source.toolkit.fluxcd.io, version: v1, kind: GitRepository}
+                metricNamePrefix: gotk_gitrepository
+                labelsFromPath:
+                  name: [metadata, name]
+                  exported_namespace: [metadata, namespace]
+                metrics:
+                  - name: info
+                    help: Ready status of a Flux object.
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          ready: [status, conditions, "[type=Ready]", status]
+              - groupVersionKind: {group: source.toolkit.fluxcd.io, version: v1, kind: HelmRepository}
+                metricNamePrefix: gotk_helmrepository
+                labelsFromPath:
+                  name: [metadata, name]
+                  exported_namespace: [metadata, namespace]
+                metrics:
+                  - name: info
+                    help: Ready status of a Flux object.
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          ready: [status, conditions, "[type=Ready]", status]
+              - groupVersionKind: {group: kustomize.toolkit.fluxcd.io, version: v1, kind: Kustomization}
+                metricNamePrefix: gotk_kustomization
+                labelsFromPath:
+                  name: [metadata, name]
+                  exported_namespace: [metadata, namespace]
+                metrics:
+                  - name: info
+                    help: Ready status of a Flux object.
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          ready: [status, conditions, "[type=Ready]", status]
+              - groupVersionKind: {group: helm.toolkit.fluxcd.io, version: v2, kind: HelmRelease}
+                metricNamePrefix: gotk_helmrelease
+                labelsFromPath:
+                  name: [metadata, name]
+                  exported_namespace: [metadata, namespace]
+                metrics:
+                  - name: info
+                    help: Ready status of a Flux object.
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          ready: [status, conditions, "[type=Ready]", status]
     prometheus-node-exporter:
       resources:
         requests:

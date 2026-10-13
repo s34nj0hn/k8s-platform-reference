@@ -23,10 +23,14 @@ The heartbeat you can check yourself, right now:
 ```console
 $ curl -s https://api.s34nj0hn.dev/cluster/heartbeat
 {"status":"online","node_count":1,"running_pods":19,"flux_ready":true,
- "gatekeeper_constraints":2,"gatekeeper_violations":0,"last_reconcile_age_seconds":296}
+ "gatekeeper_constraints":2,"gatekeeper_violations":0,"last_reconcile_age_seconds":33}
 ```
 
-`last_reconcile_age_seconds` is the field that would give me away. If Flux stops, that number climbs and anyone watching can see it.
+`last_reconcile_age_seconds` is the field that would give me away. It counts seconds since a Flux Kustomization last reconciled, which is the step that applies Git to the cluster. Five Kustomizations on 10 minute intervals keep it low, and I measured 13 to 53 on a healthy day. If Flux stops, it climbs one per second until it reports 3600.
+
+`flux_ready` is true only when every GitRepository, HelmRepository, Kustomization, and HelmRelease reports `Ready=True` and all four Flux controllers answer their metrics scrape.
+
+Both fields used to claim more than they measured. `flux_ready` counted that the Flux objects existed and never read their status. `last_reconcile_age_seconds` was a reconcile rate subtracted from 300, so a healthy cluster read 296 and a stopped one read 300. The queries now measure what the field names say.
 
 ## How it is built
 
