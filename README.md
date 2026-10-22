@@ -1,16 +1,71 @@
-# Kubernetes Platform Reference
+# Kubernetes platform reference
 
-I build infrastructure that still makes sense when you come back to it six months later.
+I built and run this Kubernetes cluster in public as a work sample for platform and security engineering roles. Flux deploys everything in it from this repo. OPA Gatekeeper rejects unsafe workloads at admission. A Cloudflare Worker publishes a health summary, the heartbeat, that you can query now:
 
-This is a small, live Kubernetes platform I run as a portfolio artifact. It is a real K3s cluster reconciled from Git, with a few controls that enforce rather than warn, documented well enough that you can check my work instead of taking my word for it.
+```console
+$ curl -s https://api.s34nj0hn.dev/cluster/heartbeat
+{"status":"online","node_count":1,"running_pods":19,"total_pods":19,"succeeded_pods":0,
+ "cluster_uptime_seconds":12092489,"cpu_usage_pct":19.5,"memory_usage_pct":64.8,"pvc_bound":0,
+ "flux_ready":true,"gatekeeper_constraints":2,"gatekeeper_violations":0,"last_reconcile_age_seconds":54}
+```
 
-It is deliberately small. One node, one boring demo app. The platform is the subject, and the app is just something for it to hold.
+I captured that response on 2026-10-13, 140 days into the cluster's current uptime.
 
-## What it looks like when it works
+My homelab runs my own services and carries old migrations and storage decisions, which makes it a poor thing to hand a reviewer. This cluster is a separate build of the same practices, on one K3s node in a VM on hardware I own. It runs one nginx app so that a reviewer can read the whole platform in an afternoon. You can check each claim below against the code, the docs, or the heartbeat.
 
-Most repositories that say "GitOps" and "policy-as-code" ask you to believe them. Here is the evidence instead.
+## What the platform runs
 
-The Gatekeeper constraint does not warn, it denies. This is from my cluster, since the API is not public:
+| Area | Tools | What this repo does with them |
+| --- | --- | --- |
+| GitOps | Flux 2.9, Kustomize, Helm | Five Kustomizations with dependency ordering. Changes reach the cluster only through a commit to `main`. |
+| Policy as code | OPA Gatekeeper 3.23 | Two constraints in deny mode, and a test fixture the admission webhook must reject |
+| Network security | Kubernetes NetworkPolicy | The demo namespace starts at default deny and opens DNS egress and one serving port |
+| Workload hardening | Pod security context | Non-root nginx, seccomp `RuntimeDefault`, no privilege escalation, and every Linux capability dropped |
+| Observability | kube-prometheus-stack, Grafana | Prometheus fits a 3.9Gi node after I cut its active series by 28% |
+| Infrastructure as code | Terraform, HCP Terraform | Cloudflare zone TLS settings in remote state, with a written ownership boundary against Flux and Wrangler |
+| Public API | Cloudflare Workers, TypeScript, Vitest | The heartbeat, with fixed server-side queries, a 30 second cache, and unit tests |
+| Tunnel | Cloudflare Tunnel | Grafana has no ingress. `cloudflared` connects out to Cloudflare, and the Worker reaches Grafana through that tunnel. |
+| Dependency updates | Renovate | Update PRs for Helm charts, container images, and Worker packages |
+
+## One owner per object
+
+```mermaid
+flowchart LR
+  repo["This GitHub repo"]
+  you(("You"))
+  tf["Terraform<br/>HCP state"]
+
+  subgraph node["K3s node · reference-01"]
+    flux["Flux"]
+    gk["Gatekeeper"]
+    app["demo-app<br/>nginx-unprivileged"]
+    prom["Prometheus<br/>+ Grafana"]
+    cfd["cloudflared"]
+  end
+
+  subgraph cf["Cloudflare"]
+    zone["Zone TLS settings"]
+    tunnel["Tunnel"]
+    worker["Worker<br/>/cluster/heartbeat"]
+  end
+
+  repo -->|pulled every minute| flux
+  flux --> gk & app & prom & cfd
+  tf --> zone
+  you -->|GET| worker
+  worker -->|fixed queries| tunnel
+  tunnel --> cfd --> prom
+```
+
+Flux owns everything inside the cluster. Terraform owns the Cloudflare zone settings. Wrangler owns the Worker and the DNS record for its custom domain. I broke that rule once, and the first problem below is the result.
+
+## Check the claims yourself
+
+The heartbeat is public. `flux_ready` is true only when every Flux source, Kustomization, and HelmRelease reports `Ready=True` and all four Flux controllers answer a metrics scrape. `last_reconcile_age_seconds` counts the seconds since Flux last applied Git to the cluster. Each Kustomization reconciles every 10 minutes, so a healthy cluster reads under about 600. Past 660, Flux has stopped.
+
+The heartbeat returns counts and percentages. It returns no node, pod, or namespace names, no IPs, no labels, and no logs. The Worker answers one path and runs fixed queries, so a caller cannot send PromQL or pick a datasource. [The public telemetry contract](docs/security/public-telemetry-contract.md) lists every allowed and forbidden field.
+
+The cluster API is private, so I ran the admission check from my machine. Gatekeeper denies a privileged pod instead of warning about it:
 
 ```console
 $ kubectl --context k8s-platform-reference apply --dry-run=server -f tests/gatekeeper/privileged-pod.yaml
@@ -18,94 +73,47 @@ Error from server (Forbidden): admission webhook "validation.gatekeeper.sh" deni
 [disallow-privileged-containers] privileged container "privileged-app" is not allowed in namespace "demo-app"
 ```
 
-The heartbeat you can check yourself, right now:
+## Problems I found and fixed
 
-```console
-$ curl -s https://api.s34nj0hn.dev/cluster/heartbeat
-{"status":"online","node_count":1,"running_pods":19,"flux_ready":true,
- "gatekeeper_constraints":2,"gatekeeper_violations":0,"last_reconcile_age_seconds":33}
-```
+### Two tools owned one DNS record
 
-`last_reconcile_age_seconds` is the field that would give me away. It counts seconds since a Flux Kustomization last reconciled, which is the step that applies Git to the cluster. Each Kustomization reconciles every 10 minutes, so on a healthy cluster it stays under about 600. A new commit makes them reconcile together, and after that the field runs from near 0 up to 600 between rounds. Past about 660, Flux has stopped. It climbs one per second until it reports 3600.
+In May I had Terraform adopt the `api.s34nj0hn.dev` record. Wrangler already managed that record as the Worker's custom domain. A later deploy recreated it, the record ID in Terraform state went stale, and `terraform plan` proposed creating a record that already existed. I released the record with `terraform state rm`, so the live record never changed. The ownership check in the Terraform runbook now asks about Wrangler as well as Flux. [The Terraform and GitOps boundary case study](docs/case-studies/02-terraform-gitops-boundary.md) has the full account.
 
-`flux_ready` is true only when every GitRepository, HelmRepository, Kustomization, and HelmRelease reports `Ready=True` and all four Flux controllers answer their metrics scrape.
+### Single-node K3s counts the apiserver twice
 
-Both fields used to claim more than they measured. `flux_ready` counted that the Flux objects existed and never read their status. `last_reconcile_age_seconds` was a reconcile rate subtracted from 300, so a healthy cluster read 296 and a stopped one read 300. The queries now measure what the field names say.
+K3s runs the kubelet and the apiserver in one process, so the kubelet metrics endpoint repeats the apiserver's metrics. kube-prometheus-stack scraped both endpoints and stored every apiserver histogram bucket twice. I dropped the duplicates at the kubelet target. Active series fell from 104,285 to 75,209, and the node got back about 200Mi. Prometheus now runs with a 900Mi memory limit, so it cannot take the node down by itself. [PR #1](https://github.com/s34nj0hn/k8s-platform-reference/pull/1) has the change and the measurements.
 
-## How it is built
+### Health fields that measured the wrong thing
 
-Flux reconciles the cluster from `GitOps/clusters/reference/` across five Kustomizations, split into infrastructure, apps, monitoring, and policy. Nothing reaches the cluster except through Git.
+`flux_ready` used to check that Flux objects existed and never read their status. `last_reconcile_age_seconds` was a reconcile rate subtracted from 300, so a healthy cluster read 296 and a stopped one read 300. Both fields looked healthy on a dashboard, and neither would have caught an outage. [PR #11](https://github.com/s34nj0hn/k8s-platform-reference/pull/11) rewrote the queries to measure what the field names say.
 
-OPA Gatekeeper enforces two constraints in deny mode. One blocks privileged containers, excluding `kube-system`, `flux-system`, `gatekeeper-system`, and `local-path-storage` by name, because a constraint that takes down kube-system teaches you nothing. The other requires labels on namespaces.
+## What the platform does not have yet
 
-The demo app starts from a default-deny NetworkPolicy and opens two paths, DNS egress and the single port it serves. It runs `nginx-unprivileged` with privilege escalation disabled and every Linux capability dropped.
+- Access control in front of Grafana. The tunnel hostname serves the Grafana login page and `/api/health`, which reports the Grafana version, to anyone.
+- CI. I run every check in [the validation pipeline](docs/operations/validation-pipeline.md) by hand before I push.
+- Alert routing. Alertmanager uses the chart's `null` receiver and delivers nothing.
+- A rate limiter I have seen work in production. Under `wrangler dev` the per-IP limiter returns 429 from the 61st request. Against the deployed Worker, 287 requests from one IP over 75 seconds all returned 200.
+- CAA records. `caa.tf` stays unapplied until I check its issuer list against the CAs Cloudflare uses.
+- SOPS for every secret. I still create the tunnel token by hand.
+- Image scanning, runtime detection, host hardening, and a tested backup and restore.
 
-kube-prometheus-stack provides metrics and Grafana inside the cluster. A Cloudflare Tunnel gives me private access to Grafana without exposing it.
-
-A Cloudflare Worker publishes the sanitized heartbeat above. Terraform owns edge primitives around the cluster, and Flux owns everything inside it.
-
-## The Terraform boundary, including where I got it wrong
-
-Terraform manages one resource, the zone's TLS and cache settings. Until 2026-10-13 it managed none, the result of a mistake I made and then undid.
-
-In May I had Terraform adopt the `api.s34nj0hn.dev` DNS record. That was a mistake. `wrangler.toml` declares the same hostname as a Worker custom domain, which makes Cloudflare Workers create and manage the underlying record. Two systems held a claim on one object. Wrangler recreated the record on a later deploy, the ID in Terraform state went stale, and `terraform plan` started proposing to create a record that already existed.
-
-I released it with `terraform state rm` rather than `terraform destroy`, so the live record was never touched. The ownership check in the runbook now asks about Wrangler as well as Flux.
-
-`zone-settings.tf` is applied. Every hostname on the zone redirects HTTP to HTTPS, refuses TLS below 1.2, and sends `Strict-Transport-Security: max-age=86400; includeSubDomains`. The Browser Cache TTL respects origin headers, so the heartbeat reaches browsers with its own `max-age=30` instead of Cloudflare's default 4 hours.
-
-`caa.tf` is written and **not applied**, so `dig CAA s34nj0hn.dev` returns nothing. Its issuer list has to be checked against the CAs Cloudflare uses first, because a wrong list does not fail at apply time. It fails weeks later, when Universal SSL cannot renew.
-
-## Running a monitoring stack on a small node
-
-The VM has 3.9Gi of RAM. Fitting a monitoring stack inside that turned up a problem specific to single-node K3s.
-
-On single-node K3s the kubelet and the apiserver are the same process, so the kubelet metrics endpoint re-exposes the entire apiserver and etcd registry. kube-prometheus-stack scrapes both targets and stored every apiserver histogram bucket twice. Dropping the duplicates from the kubelet target took active series from 104,285 to 75,209 and returned roughly 200Mi to the node. Prometheus now runs with a memory limit, so it can no longer take the node down by itself.
-
-One result is unresolved. The kubelet job fell from 57,599 series to 16,057 as designed, but the apiserver job rose from 36,721 to 49,202, which it should not have. I measured that minutes after a Prometheus restart, so it may be churn that has not aged out of the head block. I am rechecking rather than writing it up as a clean win.
-
-## What this does not claim
-
-This is a reference platform, not a production Kubernetes program. It does not have:
-
-- continuous integration, since this repo has no CI and every check above is run by hand
-- Terraform-managed CAA records, since `caa.tf` is not applied yet
-- a track record of automated dependency updates, since Renovate was only pointed here on 2026-08-31
-- alert routing, since Alertmanager runs with the chart's default `null` receiver and delivers nothing anywhere
-- runtime detection, image scanning, or a proven backup and restore path
-- host hardening coverage
-- SOPS-encrypted secrets for every secret yet
-
-I would rather list seven real gaps than imply none exist. `docs/roadmap.md` tracks what I intend to do about them and what I am deliberately leaving alone.
+[The roadmap](docs/roadmap.md) lists what I plan to fix and what I am leaving out on purpose.
 
 ## Where to read next
 
-1. `docs/architecture.md`, the cluster shape and operating boundary.
-2. `docs/security/policy-as-code.md`, what Gatekeeper enforces and why.
-3. `docs/security/network-policy-model.md`, how demo app traffic is constrained.
-4. `docs/security/public-telemetry-contract.md`, what the heartbeat may and may not expose.
-5. `docs/case-studies/02-terraform-gitops-boundary.md`, the ownership mistake above in full.
-6. `docs/roadmap.md`, planned work and intentional non-goals.
-7. `docs/operations/validation-pipeline.md`, the checks I run by hand before pushing.
+1. [Architecture](docs/architecture.md), the cluster shape and operating boundary
+2. [Policy as code](docs/security/policy-as-code.md), what Gatekeeper enforces and why
+3. [Network policy model](docs/security/network-policy-model.md), how the demo app's traffic is limited
+4. [Public telemetry contract](docs/security/public-telemetry-contract.md), what the heartbeat may and may not expose
+5. [Terraform and GitOps boundary](docs/case-studies/02-terraform-gitops-boundary.md), the DNS ownership mistake in full
+6. [Roadmap](docs/roadmap.md), planned work and intentional non-goals
 
-## What the heartbeat will not tell you
-
-The endpoint returns node count, pod counts, CPU and memory percentages, PVC count, Flux readiness, constraint and violation counts, and reconcile age.
-
-It returns no node names, pod names, namespace names, internal IPs, ingress hosts, labels, annotations, Grafana datasource IDs, Prometheus queries, logs, or trace IDs. The Worker accepts only `GET /cluster/heartbeat` and runs fixed server-side queries, so a caller cannot supply PromQL or pick a datasource.
-
-Two controls bound load. A 30 second response cache handles normal traffic, and a per-IP rate limiter runs before the cache is consulted so one caller cannot drive volume regardless of cache state. The limiter fails open. A missing binding serves traffic rather than refusing it, because the fixed queries are what bound what a caller can reach, and a missing binding should not take the endpoint down.
-
-The limiter is not proven in production. Under `wrangler dev` it allows 60 requests and returns 429 with `retry-after: 60` from the 61st. Against the deployed Worker, 287 requests from one IP over 75 seconds all returned 200. Until I find out why, treat the per-IP limit as configured, not enforced.
-
-Errors carry a status and a code and nothing else. An error is not an opportunity to leak what a success would not.
-
-## Repository map
+## Repository layout
 
 ```text
 ├── GitOps/
 │   ├── clusters/reference/     # Flux bootstrap and entry point
-│   ├── infrastructure/         # cloudflared and edge plumbing
+│   ├── infrastructure/         # cloudflared
 │   ├── apps/                   # demo workload only
 │   ├── monitoring/             # kube-prometheus-stack and ServiceMonitors
 │   └── policies/               # Gatekeeper install, templates, constraints
@@ -113,23 +121,12 @@ Errors carry a status and a code and nothing else. An error is not an opportunit
 │   └── cloudflare-edge/        # Cloudflare zone root, state in HCP Terraform
 ├── docs/                       # architecture, security, operations, case studies
 ├── tests/gatekeeper/           # fixtures the admission webhook must reject
-├── workers/public-telemetry/   # Cloudflare Worker for the sanitized heartbeat
+├── workers/public-telemetry/   # Cloudflare Worker for the heartbeat
 └── renovate.json               # dependency update rules
 ```
 
-## Current status
+## About me
 
-Verified against the live cluster on 2026-08-31.
+I'm Sean, a platform and security engineer. I build infrastructure that still makes sense when you come back to it six months later.
 
-| Thing | State |
-| --- | --- |
-| Node | one, `reference-01`, K3s v1.34.3+k3s1, 3.9Gi RAM |
-| Flux Kustomizations | 5 of 5 Ready |
-| Helm releases | Gatekeeper 3.23.1 and kube-prometheus-stack, both Ready |
-| Gatekeeper | 2 constraints enforcing, 0 violations, fixture rejected by the webhook |
-| Prometheus | 7 day retention, 900Mi limit, 75,209 active series |
-| Public heartbeat | online, cached; per-IP limiter deployed, not observed enforcing |
-| Terraform | state in HCP Terraform, 1 managed resource (zone settings) |
-| CI | none |
-
-Maintainer: Sean
+[s34nj0hn.dev](https://s34nj0hn.dev) · [LinkedIn](https://www.linkedin.com/in/s34nj0hnson)
